@@ -1,0 +1,23 @@
+{
+  "name": "off-chain",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build:tree": "node src/buildTrees.js",
+    "test": "echo \"No off-chain tests configured yet\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "circomlibjs": "^0.1.7",
+    "cors": "^2.8.6",
+    "cross-env": "^10.1.0",
+    "dotenv": "^17.4.1",
+    "ethers": "^6.16.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "xlsx": "^0.18.5"
+  }
+}

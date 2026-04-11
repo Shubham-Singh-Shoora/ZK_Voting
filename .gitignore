@@ -1,0 +1,24 @@
+**/.env
+**/.env.*
+!**/.env.example
+
+# Root-only local datasets/spreadsheets
+/IT 2027 .csv
+/IT2027.csv
+/IT2027.CSV
+/Faculty WEBSITE.xlsx
+/Faculty*.xlsx
+
+# Frontend local credential fixtures
+/frontend/src/*credentials*.json
+
+# Off-chain generated artifacts (may include voter credential material)
+/off-chain/artifacts/
+
+# Foundry generated outputs
+/on-chain/contracts/broadcast/
+/on-chain/contracts/cache/
+/on-chain/contracts/out/
+
+# Noir generated outputs
+/zk_proof/target/

@@ -1,0 +1,6 @@
+Error: Compiler run failed:
+Error: Compiler error (/solidity/libsolidity/codegen/LValue.cpp:50): Stack too deep. Try compiling with `--via-ir` (cli) or the equivalent `viaIR: true` (standard JSON) while enabling the optimizer. Otherwise, try removing local variables.
+   --> src/ZKVotingDAO.sol:173:54:
+    |
+173 |             block.timestamp + PROPOSAL_START_DELAY + _duration
+    |                                                      ^^^^^^^^^

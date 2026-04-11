@@ -1,0 +1,270 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.21;
+
+import "forge-std/Test.sol";
+import "../src/Verifier.sol";
+import "../src/EligibilityRegistry.sol";
+import "../src/ZKVotingDAO.sol";
+
+contract MockVerifier is IVerifier {
+    bool public shouldVerify = true;
+
+    function setShouldVerify(bool _shouldVerify) external {
+        shouldVerify = _shouldVerify;
+    }
+
+    function verify(
+        bytes calldata,
+        bytes32[] calldata
+    ) external view returns (bool) {
+        return shouldVerify;
+    }
+}
+
+contract ZKVotingDAOTest is Test {
+    MockVerifier public verifier;
+    EligibilityRegistry public registry;
+    ZKVotingDAO public dao;
+
+    address public monitor = address(this);
+    address public voter1 = address(0x1);
+    address public voter2 = address(0x2);
+
+    // Sample merkle root (you'll need to generate this from your off-chain code)
+    bytes32 public sampleMerkleRoot = bytes32(uint256(0x123));
+    bytes32 public secondMerkleRoot = bytes32(uint256(0x456));
+
+    function setUp() public {
+        verifier = new MockVerifier();
+        registry = new EligibilityRegistry(monitor);
+        registry.publishRoot(1, sampleMerkleRoot);
+        registry.publishRoot(2, secondMerkleRoot);
+        dao = new ZKVotingDAO(address(verifier), address(registry));
+    }
+
+    function test_DeploymentState() public view {
+        assertEq(dao.monitor(), monitor);
+        assertTrue(dao.isProposer(monitor));
+        assertEq(address(dao.verifier()), address(verifier));
+        assertEq(address(dao.eligibilityRegistry()), address(registry));
+        assertEq(dao.proposalCount(), 0);
+    }
+
+    function test_CreateProposal() public {
+        string memory description = "Increase treasury allocation";
+        uint256 duration = 7 days;
+
+        uint256 proposalId = dao.createProposal(description, 1, duration, address(0), 0, "");
+
+        assertEq(proposalId, 0);
+        assertEq(dao.proposalCount(), 1);
+    }
+
+    function test_ProposalIsActive() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+
+        assertFalse(dao.isProposalActive(0));
+
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+        assertTrue(dao.isProposalActive(0));
+
+        // Warp past end time
+        vm.warp(block.timestamp + 8 days);
+        assertFalse(dao.isProposalActive(0));
+    }
+
+    function test_RevertWhen_NonProposerCreatesProposal() public {
+        vm.prank(voter1);
+        vm.expectRevert(ZKVotingDAO.OnlyProposer.selector);
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+    }
+
+    function test_RevertWhen_UnknownEligibilityRound() public {
+        vm.expectRevert(ZKVotingDAO.UnknownEligibilityRound.selector);
+        dao.createProposal("Test", 999, 7 days, address(0), 0, "");
+    }
+
+    function test_TransferMonitor() public {
+        dao.transferMonitor(voter1);
+        assertEq(dao.monitor(), voter1);
+    }
+
+    function test_SetProposer() public {
+        dao.setProposer(voter1, true);
+        assertTrue(dao.isProposer(voter1));
+
+        dao.setProposer(voter1, false);
+        assertFalse(dao.isProposer(voter1));
+    }
+
+    function test_ExecuteProposal() public {
+        dao.createProposal("Test", 1, 1 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 2 days);
+
+        dao.executeProposal(0);
+
+        (, , , , , , , bool executed, , , , ) = dao.proposals(0);
+        assertTrue(executed);
+    }
+
+    function test_RevertWhen_ExecuteBeforeVotingEnds() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1 days);
+
+        vm.expectRevert(ZKVotingDAO.VotingNotEnded.selector);
+        dao.executeProposal(0);
+    }
+
+    function test_RevertWhen_ExecuteTwice() public {
+        dao.createProposal("Test", 1, 1 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 2 days);
+
+        dao.executeProposal(0);
+
+        vm.expectRevert(ZKVotingDAO.ProposalAlreadyExecuted.selector);
+        dao.executeProposal(0);
+    }
+
+    function test_GetProposalResult() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+
+        (uint256 yes, uint256 no, bool wouldPass) = dao.getProposalResult(0);
+        assertEq(yes, 0);
+        assertEq(no, 0);
+        assertFalse(wouldPass); // 0 > 0 is false
+    }
+
+    function test_RevertWhen_InvalidPublicInputsLength() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        bytes32[] memory publicInputs = new bytes32[](2);
+        publicInputs[0] = sampleMerkleRoot;
+        publicInputs[1] = bytes32(uint256(0));
+
+        vm.expectRevert(ZKVotingDAO.InvalidPublicInputsLength.selector);
+        dao.vote(0, true, hex"1234", publicInputs);
+    }
+
+    function test_RevertWhen_RootMismatch() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = secondMerkleRoot;
+        publicInputs[1] = bytes32(uint256(0));
+        publicInputs[2] = bytes32(uint256(111));
+
+        vm.expectRevert(ZKVotingDAO.RootMismatch.selector);
+        dao.vote(0, true, hex"1234", publicInputs);
+    }
+
+    function test_RevertWhen_ProposalIdMismatch() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = sampleMerkleRoot;
+        publicInputs[1] = bytes32(uint256(99));
+        publicInputs[2] = bytes32(uint256(222));
+
+        vm.expectRevert(ZKVotingDAO.ProposalIdMismatch.selector);
+        dao.vote(0, true, hex"1234", publicInputs);
+    }
+
+    function test_RevertWhen_NullifierUsedTwice() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = sampleMerkleRoot;
+        publicInputs[1] = bytes32(uint256(0));
+        publicInputs[2] = bytes32(uint256(333));
+
+        dao.vote(0, true, hex"1234", publicInputs);
+
+        vm.expectRevert(ZKVotingDAO.NullifierAlreadyUsed.selector);
+        dao.vote(0, false, hex"5678", publicInputs);
+    }
+
+    function test_RevertWhen_InvalidProof() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        verifier.setShouldVerify(false);
+
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = sampleMerkleRoot;
+        publicInputs[1] = bytes32(uint256(0));
+        publicInputs[2] = bytes32(uint256(444));
+
+        vm.expectRevert(ZKVotingDAO.InvalidProof.selector);
+        dao.vote(0, true, hex"1234", publicInputs);
+    }
+
+    function test_VoteRecordsYesVote() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = sampleMerkleRoot;
+        publicInputs[1] = bytes32(uint256(0));
+        publicInputs[2] = bytes32(uint256(555));
+
+        dao.vote(0, true, hex"1234", publicInputs);
+
+        (uint256 yes, uint256 no, bool wouldPass) = dao.getProposalResult(0);
+        assertEq(yes, 1);
+        assertEq(no, 0);
+        assertTrue(wouldPass);
+        assertTrue(dao.isNullifierUsed(0, bytes32(uint256(555))));
+    }
+
+    function test_CancelProposalBeforeStart() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+
+        dao.cancelProposal(0);
+
+        (, , , , , , , , bool cancelled, , , ) = dao.proposals(0);
+        assertTrue(cancelled);
+        assertFalse(dao.isProposalActive(0));
+    }
+
+    function test_RevertWhen_CancelAfterStart() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        vm.expectRevert(ZKVotingDAO.VotingAlreadyStarted.selector);
+        dao.cancelProposal(0);
+    }
+
+    function test_RevertWhen_NonMonitorCancels() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+
+        vm.prank(voter1);
+        vm.expectRevert(ZKVotingDAO.OnlyMonitor.selector);
+        dao.cancelProposal(0);
+    }
+
+    function test_RevertWhen_VoteOnCancelledProposal() public {
+        dao.createProposal("Test", 1, 7 days, address(0), 0, "");
+        dao.cancelProposal(0);
+        vm.warp(block.timestamp + dao.PROPOSAL_START_DELAY() + 1);
+
+        bytes32[] memory publicInputs = new bytes32[](3);
+        publicInputs[0] = sampleMerkleRoot;
+        publicInputs[1] = bytes32(uint256(0));
+        publicInputs[2] = bytes32(uint256(888));
+
+        vm.expectRevert(ZKVotingDAO.ProposalCancelledError.selector);
+        dao.vote(0, true, hex"1234", publicInputs);
+    }
+
+    // Note: Testing actual voting with ZK proofs requires:
+    // 1. Generate a valid proof using nargo prove
+    // 2. Extract the proof bytes and public inputs
+    // 3. Call the vote function with the proof
+    //
+    // This would typically be done in an integration test with
+    // the off-chain proof generation system.
+}
