@@ -29,6 +29,7 @@ export const DAO_ABI = [
     "function isProposalActive(uint256 _proposalId) external view returns (bool)",
     "function getProposalResult(uint256 _proposalId) external view returns (uint256 yesVotes, uint256 noVotes, bool wouldPass)",
     "function proposalCount() external view returns (uint256)",
+    "function proposerEligibilityRound() external view returns (uint256)",
     "function monitor() external view returns (address)",
     "function isProposer(address _candidate) external view returns (bool)",
     "function eligibilityRegistry() external view returns (address)",

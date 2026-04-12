@@ -40,6 +40,9 @@ import { DocsPage } from "./pages/DocsPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import "./App.css";
 
+const BN254_FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+const PROPOSER_REGISTRATION_ID_FIELD = ethers.MaxUint256 % BN254_FIELD_MODULUS;
+
 function App() {
     const [view, setView] = useState<ViewState>("LANDING");
     const [status, setStatus] = useState("");
@@ -88,6 +91,64 @@ function App() {
         return window.ethereum;
     }
 
+    function getExpectedChainHex() {
+        return `0x${CHAIN_ID.toString(16)}`;
+    }
+
+    async function ensureExpectedChain(providerSource: EthereumProvider) {
+        const chainIdHex = await providerSource.request({ method: "eth_chainId" });
+        const activeChainId =
+            typeof chainIdHex === "string" ? Number.parseInt(chainIdHex, 16) : Number.NaN;
+
+        if (activeChainId === CHAIN_ID) {
+            return true;
+        }
+
+        try {
+            await providerSource.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: getExpectedChainHex() }],
+            });
+            return true;
+        } catch (error) {
+            console.error(error);
+            showStatus(`Wrong network. Switch wallet to ${chainLabel} (chain ${CHAIN_ID}).`);
+            recordActivity("Network mismatch", `Wallet is not connected to ${chainLabel}.`, "warn");
+            return false;
+        }
+    }
+
+    async function getDaoReadContext() {
+        const providerSource = getEthereumProvider();
+        if (!providerSource) {
+            throw new Error("Wallet provider unavailable.");
+        }
+
+        const onExpectedChain = await ensureExpectedChain(providerSource);
+        if (!onExpectedChain) {
+            throw new Error(`Please switch to ${chainLabel}.`);
+        }
+
+        const provider = new ethers.BrowserProvider(providerSource);
+        const bytecode = await provider.getCode(DAO_CONTRACT_ADDRESS);
+
+        if (!bytecode || bytecode === "0x") {
+            throw new Error(
+                `No ZKVotingDAO contract found at ${DAO_CONTRACT_ADDRESS} on ${chainLabel}.`,
+            );
+        }
+
+        const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+        return { provider, contract };
+    }
+
+    async function getDaoWriteContract() {
+        const { provider } = await getDaoReadContext();
+        const signer = await provider.getSigner();
+        const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, signer);
+        return { provider, signer, contract };
+    }
+
     function recordActivity(
         title: string,
         detail: string,
@@ -132,7 +193,7 @@ function App() {
             }
 
             await providerSource.request({ method: "eth_requestAccounts" });
-            const provider = new ethers.BrowserProvider(providerSource);
+            const { provider, contract } = await getDaoReadContext();
             const signer = await provider.getSigner();
             const address = await signer.getAddress();
 
@@ -142,7 +203,6 @@ function App() {
 
             await loadProposals();
 
-            const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
             const proposerFlag = await contract.isProposer(address);
             setIsProposerRole(Boolean(proposerFlag));
 
@@ -162,8 +222,7 @@ function App() {
                 return;
             }
 
-            const provider = new ethers.BrowserProvider(providerSource);
-            const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+            const { contract } = await getDaoReadContext();
             const count = await contract.proposalCount();
             const total = Number(count);
 
@@ -191,10 +250,15 @@ function App() {
             setProposals(loaded.reverse());
         } catch (error) {
             console.error(error);
-            setStatus("Could not load proposals.");
+            const message = getErrorMessage(error);
+            if (message.includes("No ZKVotingDAO contract found")) {
+                setStatus(message);
+            } else {
+                setStatus("Could not load proposals.");
+            }
             window.setTimeout(() => setStatus(""), 4500);
         }
-    }, []);
+    }, [chainLabel]);
 
     function handleVerifyEligibility() {
         if (!verifyEmail.trim()) {
@@ -252,28 +316,41 @@ function App() {
             const secretIndex = getSecretIndexForRound(mySecret, roundId);
             const { pathElements, pathIndices } = getMerklePath(secretIndex, roundId);
 
-            const providerSource = getEthereumProvider();
-            if (!providerSource) {
-                showStatus("Wallet provider unavailable.");
-                return;
+            const { provider, signer, contract: signerContract } = await getDaoWriteContract();
+            const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+            let configuredRound = Number(await contract.proposerEligibilityRound());
+            if (configuredRound !== roundId) {
+                const monitorAddress = String(await contract.monitor()).toLowerCase();
+                const signerAddress = String(await signer.getAddress()).toLowerCase();
+
+                if (signerAddress !== monitorAddress) {
+                    throw new Error(
+                        `DAO proposer round is ${configuredRound}. Monitor (${monitorAddress}) must set proposer round to ${roundId}.`,
+                    );
+                }
+
+                showStatus(`Configuring proposer round to ${roundId}...`);
+                const setRoundTx = await signerContract.setProposerEligibilityRound(roundId);
+                await setRoundTx.wait();
+                configuredRound = Number(await contract.proposerEligibilityRound());
+
+                if (configuredRound !== roundId) {
+                    throw new Error(`Failed to set proposer round to ${roundId}.`);
+                }
             }
 
-            const provider = new ethers.BrowserProvider(providerSource);
-            const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
             const registryAddress = await contract.eligibilityRegistry();
             const registry = new ethers.Contract(registryAddress, ELIGIBILITY_REGISTRY_ABI, provider);
-            const proposerRoot = await registry.getRoot(999);
+            const proposerRoot = await registry.getRoot(roundId);
 
             const { proof, publicInputs } = await generateProof({
                 secret: mySecret,
                 pathElements,
                 pathIndices,
-                proposalId: ethers.MaxUint256,
+                proposalId: PROPOSER_REGISTRATION_ID_FIELD,
                 root: BigInt(proposerRoot),
             });
 
-            const signer = await provider.getSigner();
-            const signerContract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, signer);
             const publicInputsBytes32 = publicInputs.map((input: string) =>
                 ethers.zeroPadValue(ethers.toBeHex(BigInt(input)), 32),
             );
@@ -286,7 +363,15 @@ function App() {
             recordActivity("Proposer registered", "ZK proposer registration completed.", "success");
         } catch (error) {
             console.error(error);
-            showStatus("Proposer registration failed.");
+            const message = getErrorMessage(error);
+            if (
+                message.includes("No ZKVotingDAO contract found")
+                || message.includes("DAO proposer round is")
+            ) {
+                showStatus(message);
+            } else {
+                showStatus("Proposer registration failed.");
+            }
             recordActivity("Proposer registration failed", "Proof or transaction confirmation failed.", "warn");
         } finally {
             setIsLoading(false);
@@ -314,9 +399,7 @@ function App() {
                 return;
             }
 
-            const provider = new ethers.BrowserProvider(providerSource);
-            const signer = await provider.getSigner();
-            const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, signer);
+            const { contract } = await getDaoWriteContract();
             const durationSeconds = Math.floor(newProposalDurationMinutes * 60);
 
             const tx = await contract.createProposal(newProposalDesc, newProposalRound, durationSeconds);
@@ -330,7 +413,12 @@ function App() {
             await loadProposals();
         } catch (error) {
             console.error(error);
-            showStatus("Failed to create proposal.");
+            const message = getErrorMessage(error);
+            if (message.includes("No ZKVotingDAO contract found")) {
+                showStatus(message);
+            } else {
+                showStatus("Failed to create proposal.");
+            }
             recordActivity("Proposal creation failed", "Transaction failed before confirmation.", "warn");
         } finally {
             setIsLoading(false);
@@ -415,9 +503,7 @@ function App() {
                 return;
             }
 
-            const provider = new ethers.BrowserProvider(providerSource);
-            const signer = await provider.getSigner();
-            const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, signer);
+            const { contract } = await getDaoWriteContract();
 
             const tx = await contract.executeProposal(proposalId);
             await tx.wait();
@@ -427,7 +513,12 @@ function App() {
             await loadProposals();
         } catch (error) {
             console.error(error);
-            showStatus("Execution failed. Check proposal state and signer wallet.");
+            const message = getErrorMessage(error);
+            if (message.includes("No ZKVotingDAO contract found")) {
+                showStatus(message);
+            } else {
+                showStatus("Execution failed. Check proposal state and signer wallet.");
+            }
             recordActivity("Execution failed", `Could not execute proposal #${proposalId}.`, "warn");
         } finally {
             setIsLoading(false);

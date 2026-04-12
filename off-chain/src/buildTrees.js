@@ -27,7 +27,8 @@ function parseArgs(argv) {
         input: "./data/eligible.csv",
         out: "./artifacts",
         round: 1,
-        salt: "department-default-salt"
+        salt: "department-default-salt",
+        depth: 6
     };
 
     let positionalIndex = 0;
@@ -37,19 +38,25 @@ function parseArgs(argv) {
         if (current === "--out") args.out = argv[++i];
         if (current === "--round") args.round = Number(argv[++i]);
         if (current === "--salt") args.salt = argv[++i];
+        if (current === "--depth") args.depth = Number(argv[++i]);
 
-        // Positional fallback: input out round salt
+        // Positional fallback: input out round salt depth
         if (!current.startsWith("--")) {
             if (positionalIndex === 0) args.input = current;
             if (positionalIndex === 1) args.out = current;
             if (positionalIndex === 2) args.round = Number(current);
             if (positionalIndex === 3) args.salt = current;
+            if (positionalIndex === 4) args.depth = Number(current);
             positionalIndex++;
         }
     }
 
     if (!Number.isInteger(args.round) || args.round < 0) {
         throw new Error("--round must be a non-negative integer");
+    }
+
+    if (!Number.isInteger(args.depth) || args.depth < 1) {
+        throw new Error("--depth must be a positive integer");
     }
 
     return args;
@@ -121,7 +128,7 @@ async function parseEligibleEmails(inputPath) {
     return deduped;
 }
 
-async function buildTreeFromEmails(emails, salt) {
+async function buildTreeFromEmails(emails, salt, targetDepth) {
     const zeroLeaf = await poseidonHash([0n]);
 
     const voterRecords = [];
@@ -135,7 +142,14 @@ async function buildTreeFromEmails(emails, salt) {
         voterRecords.push({ email, emailHash, secret, leaf });
     }
 
-    const targetLeafCount = nextPowerOfTwo(leaves.length);
+    const maxLeavesAtDepth = 1 << targetDepth;
+    if (leaves.length > maxLeavesAtDepth) {
+        throw new Error(
+            `Configured depth ${targetDepth} supports at most ${maxLeavesAtDepth} leaves, got ${leaves.length}`
+        );
+    }
+
+    const targetLeafCount = maxLeavesAtDepth;
     while (leaves.length < targetLeafCount) {
         leaves.push(zeroLeaf);
     }
@@ -236,12 +250,13 @@ async function main() {
     const outDir = path.resolve(args.out);
 
     const emails = await parseEligibleEmails(inputPath);
-    const tree = await buildTreeFromEmails(emails, args.salt);
+    const tree = await buildTreeFromEmails(emails, args.salt, args.depth);
     writeArtifacts(outDir, args.round, tree);
 
     console.log("Eligibility tree artifacts generated");
     console.log(`Round: ${args.round}`);
     console.log(`Eligible users: ${emails.length}`);
+    console.log(`Configured depth: ${args.depth}`);
     console.log(`Tree depth: ${tree.depth}`);
     console.log(`Root: ${tree.root.toString()}`);
     console.log(`Output directory: ${outDir}`);

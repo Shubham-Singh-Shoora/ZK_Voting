@@ -1,66 +1,96 @@
-## Foundry
+## ZKVotingDAO Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This folder contains the Foundry project for the DAO, verifier, and eligibility registry.
 
-Foundry consists of:
+## Prerequisites
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- Foundry installed: https://book.getfoundry.sh/
+- A `.env` file with at least:
+	- `PRIVATE_KEY=0x...`
+	- `RPC_URL=https://...`
 
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
+## Common Commands
 
 ### Build
 
 ```shell
-$ forge build
+forge build
 ```
 
 ### Test
 
 ```shell
-$ forge test
+forge test
 ```
 
-### Format
+## Deploy (Arbitrum Sepolia)
+
+The deploy script now performs all required configuration for proposer registration:
+
+- Deploys `HonkVerifier`
+- Deploys `EligibilityRegistry`
+- Publishes voter root for round `1`
+- Publishes proposer root for round `999`
+- Deploys `ZKVotingDAO`
+- Sets `proposerEligibilityRound` to `999`
+
+Run (Bash):
 
 ```shell
-$ forge fmt
+set -a; source .env; set +a
+forge script script/Deploy.s.sol:DeployZKVotingDAO --rpc-url $RPC_URL --broadcast
 ```
 
-### Gas Snapshots
+Run (PowerShell):
+
+```powershell
+$env:PRIVATE_KEY = "0x..."
+$env:RPC_URL = "https://..."
+forge script script/Deploy.s.sol:DeployZKVotingDAO --rpc-url $env:RPC_URL --broadcast
+```
+
+After deployment, record the DAO address from logs and update frontend config/env accordingly.
+
+## One-Time Fix for Existing DAO (Round Was 0)
+
+If an already-deployed DAO has `proposerEligibilityRound == 0`, run the remediation script.
+
+Required env vars:
+
+- `PRIVATE_KEY=0x...` (must be the DAO monitor key)
+- `DAO_ADDRESS=0x...`
+- Optional: `PROPOSER_ROUND=999` (defaults to `999`)
+
+Run (Bash):
 
 ```shell
-$ forge snapshot
+set -a; source .env; set +a
+forge script script/SetProposerRound.s.sol:SetProposerRound --rpc-url $RPC_URL --broadcast
 ```
 
-### Anvil
+Run (PowerShell):
+
+```powershell
+$env:PRIVATE_KEY = "0x..."
+$env:DAO_ADDRESS = "0x..."
+$env:PROPOSER_ROUND = "999"
+$env:RPC_URL = "https://..."
+forge script script/SetProposerRound.s.sol:SetProposerRound --rpc-url $env:RPC_URL --broadcast
+```
+
+The script verifies:
+
+- signer is DAO monitor
+- round is updated to the requested proposer round
+
+## Quick Verification (Cast)
 
 ```shell
-$ anvil
+cast call <DAO_ADDRESS> "proposerEligibilityRound()(uint256)" --rpc-url $RPC_URL
+cast call <DAO_ADDRESS> "monitor()(address)" --rpc-url $RPC_URL
+cast call <DAO_ADDRESS> "eligibilityRegistry()(address)" --rpc-url $RPC_URL
 ```
 
-### Deploy
+PowerShell users can replace `$RPC_URL` with `$env:RPC_URL`.
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Expected proposer round is `999` unless you intentionally configured another round.

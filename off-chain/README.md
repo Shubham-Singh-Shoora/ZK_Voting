@@ -16,7 +16,7 @@ student2@iiitsonepat.ac.in
 
 ```bash
 npm install
-npm run build:tree -- --input ./data/eligible.sample.csv --out ./artifacts --round 1 --salt "dept-2026"
+npm run build:tree -- --input ./data/eligible.sample.csv --out ./artifacts --round 1 --salt "dept-2026" --depth 6
 ```
 
 ## Outputs
@@ -34,3 +34,4 @@ npm run build:tree -- --input ./data/eligible.sample.csv --out ./artifacts --rou
 - Secrets are derived as `sha256(email|salt) mod field`.
 - Leaves are computed as `poseidon(secret)`.
 - Tree is padded to next power of two with `poseidon(0)`.
+- Tree depth can be pinned with `--depth` (default `6`).

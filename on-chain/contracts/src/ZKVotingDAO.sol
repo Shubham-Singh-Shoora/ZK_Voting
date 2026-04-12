@@ -42,7 +42,11 @@ contract ZKVotingDAO {
     mapping(uint256 => mapping(bytes32 => bool)) public nullifierUsed;
 
     uint256 public proposerEligibilityRound;
+    uint256 public constant SNARK_SCALAR_FIELD =
+        21888242871839275222246405745257275088548364400416034343698204186575808495617;
     uint256 public constant PROPOSER_REGISTRATION_ID = type(uint256).max;
+    uint256 public constant PROPOSER_REGISTRATION_ID_FIELD =
+        PROPOSER_REGISTRATION_ID % SNARK_SCALAR_FIELD;
     mapping(bytes32 => bool) public proposerNullifierUsed;
 
     // ============ Events ============
@@ -63,7 +67,10 @@ contract ZKVotingDAO {
         bool support
     );
 
-    event ProposerRegistered(address indexed proposer, bytes32 indexed nullifier);
+    event ProposerRegistered(
+        address indexed proposer,
+        bytes32 indexed nullifier
+    );
 
     event ProposalExecuted(uint256 indexed proposalId, bool passed);
     event ProposalCancelled(
@@ -291,11 +298,16 @@ contract ZKVotingDAO {
         if (!eligibilityRegistry.rootExists(proposerEligibilityRound)) {
             revert UnknownEligibilityRound();
         }
-        bytes32 merkleRoot = eligibilityRegistry.getRoot(proposerEligibilityRound);
+        bytes32 merkleRoot = eligibilityRegistry.getRoot(
+            proposerEligibilityRound
+        );
 
         if (_publicInputs.length != 3) revert InvalidPublicInputsLength();
         if (_publicInputs[0] != merkleRoot) revert RootMismatch();
-        if (uint256(_publicInputs[1]) != PROPOSER_REGISTRATION_ID) revert ProposalIdMismatch();
+        // Circuit public inputs are field elements, so compare against the field-reduced sentinel.
+        if (uint256(_publicInputs[1]) != PROPOSER_REGISTRATION_ID_FIELD) {
+            revert ProposalIdMismatch();
+        }
 
         bytes32 nullifier = _publicInputs[2];
         if (proposerNullifierUsed[nullifier]) revert NullifierAlreadyUsed();
