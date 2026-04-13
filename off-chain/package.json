@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node src/server.js",
     "build:tree": "node src/buildTrees.js",
     "test": "echo \"No off-chain tests configured yet\""
   },

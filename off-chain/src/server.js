@@ -54,7 +54,7 @@ app.post('/api/relay/vote', async (req, res) => {
     }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Relayer server running on port ${PORT}`);
     console.log(`Funded Relayer address configured to pay for Gas.`);

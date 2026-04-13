@@ -33,6 +33,7 @@ export const DAO_ABI = [
     "function monitor() external view returns (address)",
     "function isProposer(address _candidate) external view returns (bool)",
     "function eligibilityRegistry() external view returns (address)",
+    "function proposerNullifierUsed(bytes32) external view returns (bool)",
 
     // Events
     "event ProposalCreated(uint256 indexed proposalId, address indexed proposer, string description, uint256 eligibilityRound, bytes32 merkleRoot, uint256 startTime, uint256 endTime)",

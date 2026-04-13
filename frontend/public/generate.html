@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Verifier Generator</title>
+</head>
+<body>
+    <div id="status">Initializing Barretenberg...</div>
+    <pre id="output" style="white-space: pre-wrap; word-break: break-all;"></pre>
+    <script type="module">
+        // Use the same versions as the frontend
+        import { Barretenberg, UltraHonkBackend } from 'https://cdn.jsdelivr.net/npm/@aztec/bb.js@4.1.3/dest/browser/index.js';
+
+        async function main() {
+            try {
+                const status = document.getElementById('status');
+                const output = document.getElementById('output');
+
+                const response = await fetch('./dao.json');
+                const circuit = await response.json();
+                
+                status.innerText = "Initializing Barretenberg WASM...";
+                const bb = await Barretenberg.new({ threads: 1 });
+                
+                status.innerText = "Generating Verification Key...";
+                const backend = new UltraHonkBackend(circuit.bytecode, bb);
+                const vk = await backend.getVerificationKey();
+                
+                status.innerText = "Generating Solidity Verifier (evm-no-zk)...";
+                const verifier = await backend.getSolidityVerifier(vk, { verifierTarget: 'evm-no-zk' });
+                
+                status.innerText = "SUCCESS! Copy the code below:";
+                output.innerText = verifier;
+                
+                await bb.destroy();
+            } catch (error) {
+                console.error(error);
+                document.getElementById('status').innerText = "ERROR: " + error.message;
+            }
+        }
+        main();
+    </script>
+</body>
+</html>

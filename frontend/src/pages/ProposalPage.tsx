@@ -1,4 +1,5 @@
 import { Vote } from "lucide-react";
+import { useState } from "react";
 import type { Proposal, ProposalStage } from "../types";
 
 interface ProposalPageProps {
@@ -7,13 +8,15 @@ interface ProposalPageProps {
     yesShare: number;
     mySecret: bigint | null;
     isLoading: boolean;
-    onVoteYes: () => void;
-    onVoteNo: () => void;
+    onVoteYes: (manualSecret?: string) => void;
+    onVoteNo: (manualSecret?: string) => void;
     onExecute: () => void;
     onBackToHub: () => void;
 }
 
 export function ProposalPage(props: ProposalPageProps) {
+    const [manualSecret, setManualSecret] = useState(props.mySecret?.toString() || "");
+
     return (
         <section className="page reveal">
             <div className="page-head split">
@@ -49,18 +52,29 @@ export function ProposalPage(props: ProposalPageProps) {
                         <p className="muted-copy">
                             Proofs are generated in-browser, then sent through the relayer for gasless execution.
                         </p>
-                        {props.mySecret ? (
-                            <div className="button-row">
-                                <button className="primary-btn vote-btn" disabled={props.isLoading} onClick={props.onVoteYes}>
-                                    <Vote size={16} /> Vote Yes
-                                </button>
-                                <button className="danger-btn vote-btn" disabled={props.isLoading} onClick={props.onVoteNo}>
-                                    <Vote size={16} /> Vote No
-                                </button>
-                            </div>
-                        ) : (
-                            <p className="muted-copy">Verify your identity first to unlock your secret witness.</p>
-                        )}
+                        
+                        <div className="secret-input-row" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--tg-text-muted)' }}>
+                                Your ZK Secret (Numeric string from verification)
+                            </label>
+                            <input 
+                                type="text"
+                                className="page-input"
+                                style={{ width: '100%', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                                placeholder="Paste your secret numeric string here..."
+                                value={manualSecret}
+                                onChange={(e) => setManualSecret(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="button-row">
+                            <button className="primary-btn vote-btn" disabled={props.isLoading} onClick={() => props.onVoteYes(manualSecret)}>
+                                <Vote size={16} /> Vote Yes
+                            </button>
+                            <button className="danger-btn vote-btn" disabled={props.isLoading} onClick={() => props.onVoteNo(manualSecret)}>
+                                <Vote size={16} /> Vote No
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <p className="muted-copy">Voting is not currently open for this proposal.</p>

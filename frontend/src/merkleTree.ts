@@ -148,3 +148,24 @@ export function getSecretIndexForRound(secret: bigint, roundId = 1): number {
     }
     return getSecretIndex(secret);
 }
+
+/**
+ * Searches for a secret across common rounds (e.g. 1 and 999) 
+ * Returns the roundId and index if found, otherwise throws.
+ */
+export function findRoundAndIndexForSecret(secret: bigint) {
+    const rounds = [1, 999];
+    for (const roundId of rounds) {
+        const credentials = getCredentialsForRound(roundId);
+        const index = credentials.findIndex(c => c.secret === secret);
+        if (index !== -1) {
+            return { roundId, index };
+        }
+    }
+    
+    // Fallback to legacy demo secrets
+    const demoIndex = DEMO_SECRETS.findIndex(s => s === secret);
+    if (demoIndex !== -1) return { roundId: 1, index: demoIndex };
+
+    throw new Error(`Secret ${secret.toString().substring(0, 10)}... not recognized in any active eligibility rounds.`);
+}

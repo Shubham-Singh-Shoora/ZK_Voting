@@ -5,6 +5,7 @@ import {
     getCredentialsForRound,
     getMerklePath,
     getSecretIndexForRound,
+    findRoundAndIndexForSecret,
 } from "./merkleTree";
 import {
     CHAIN_ID,
@@ -149,6 +150,34 @@ function App() {
         return { provider, signer, contract };
     }
 
+    async function getGasOverrides() {
+        try {
+            const providerSource = getEthereumProvider();
+            if (!providerSource) return {};
+            const provider = new ethers.BrowserProvider(providerSource);
+            const feeData = await provider.getFeeData();
+            
+            // Check if the provider actually supports EIP-1559 methods
+            const hasEip1559 = !!feeData.maxPriorityFeePerGas && !!feeData.maxFeePerGas;
+
+            if (!hasEip1559) {
+                // If EIP-1559 fails, fallback to standard gasPrice with a buffer
+                const gasPrice = feeData.gasPrice ?? ethers.parseUnits("1.5", "gwei");
+                return {
+                    gasPrice: (gasPrice * 120n) / 100n
+                };
+            }
+
+            return {
+                maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas * 120n) / 100n,
+                maxFeePerGas: (feeData.maxFeePerGas * 120n) / 100n,
+            };
+        } catch (e) {
+            console.warn("Failed to fetch gas fees, falling back to defaults:", e);
+            return {};
+        }
+    }
+
     function recordActivity(
         title: string,
         detail: string,
@@ -280,7 +309,7 @@ function App() {
         if (proposerCredential) {
             setMyRole("Faculty proposer cohort (Round 999)");
             setMySecret(proposerCredential.secret);
-            showStatus("Faculty credential located.");
+            showStatus(`Faculty verified! Secret: ${proposerCredential.secret.toString().substring(0, 12)}...`);
             recordActivity("Eligibility verified", "Matched proposer credential in round 999.", "success");
             return;
         }
@@ -292,7 +321,7 @@ function App() {
         if (voterCredential) {
             setMyRole("Student voter cohort (Round 1)");
             setMySecret(voterCredential.secret);
-            showStatus("Student credential located.");
+            showStatus(`Student verified! Secret: ${voterCredential.secret.toString().substring(0, 12)}...`);
             recordActivity("Eligibility verified", "Matched student voter credential in round 1.", "success");
             return;
         }
@@ -330,7 +359,8 @@ function App() {
                 }
 
                 showStatus(`Configuring proposer round to ${roundId}...`);
-                const setRoundTx = await signerContract.setProposerEligibilityRound(roundId);
+                const overrides = await getGasOverrides();
+                const setRoundTx = await signerContract.setProposerEligibilityRound(roundId, overrides);
                 await setRoundTx.wait();
                 configuredRound = Number(await contract.proposerEligibilityRound());
 
@@ -343,6 +373,26 @@ function App() {
             const registry = new ethers.Contract(registryAddress, ELIGIBILITY_REGISTRY_ABI, provider);
             const proposerRoot = await registry.getRoot(roundId);
 
+            // Pre-flight check: Is the user already a proposer?
+            const alreadyProposer = await contract.isProposer(userAddress);
+            if (alreadyProposer) {
+                showStatus("You are already registered as a proposer.");
+                setIsProposerRole(true);
+                return;
+            }
+
+            // Merkle Sync Check: Does local credential match on-chain root?
+            // Since the JSON doesn't store the root, we check if the path is valid for our on-chain root
+            // (Verification happens during proof generation, but we log the attempt)
+            
+            console.log("Generating proposer ZK proof with inputs:", {
+                secretIndex,
+                pathElements: pathElements.map((e) => e.toString()),
+                pathIndices,
+                root: proposerRoot.toString(),
+                proposalId: PROPOSER_REGISTRATION_ID_FIELD.toString(),
+            });
+
             const { proof, publicInputs } = await generateProof({
                 secret: mySecret,
                 pathElements,
@@ -351,28 +401,77 @@ function App() {
                 root: BigInt(proposerRoot),
             });
 
+            console.log("ZK proof generated successfully.");
+            console.log("Proof length (bytes):", proof.length);
+            console.log("Proof length (fields):", proof.length / 32);
+            console.log("Public inputs (ordered):", publicInputs);
+
+
+            // Debug check: compare against expected root and registration ID
+            // Note: Noir 1.0 public input ordering can vary; we log all for inspection.
+            if (!publicInputs.includes(proposerRoot.toString().toLowerCase())) {
+                console.warn("WARNING: The contract's Merkle root is not present in the proof's public inputs.");
+            }
+            const regIdHex = ethers.toBeHex(PROPOSER_REGISTRATION_ID_FIELD).toLowerCase();
+            if (!publicInputs.some(input => input.toLowerCase() === regIdHex)) {
+                console.warn("WARNING: The PROPOSER_REGISTRATION_ID_FIELD is not present in the proof's public inputs.");
+            }
+
             const publicInputsBytes32 = publicInputs.map((input: string) =>
                 ethers.zeroPadValue(ethers.toBeHex(BigInt(input)), 32),
             );
 
-            const tx = await signerContract.registerProposer(proof, publicInputsBytes32);
+            // Nullifier Check: Has this specific secret/identity already been used to register?
+            const nullifierUsed = await contract.proposerNullifierUsed(publicInputsBytes32[2]);
+            if (nullifierUsed) {
+                throw new Error("This proposer identity (nullifier) has already been registered on-chain.");
+            }
+
+            const overrides = await getGasOverrides();
+            showStatus("Validating proof with blockchain (Dry Run)...");
+            
+            // Perform a Dry Run (staticCall) to catch the actual revert reason
+            try {
+                await contract.registerProposer.staticCall(proof, publicInputsBytes32);
+                console.log("Dry run successful! Proof is valid.");
+            } catch (dryRunError: any) {
+                console.error("Dry run failed:", dryRunError);
+                // Attempt to extract revert reason from ethers error
+                const reason = dryRunError.reason || dryRunError.message || "";
+                if (reason.includes("RootMismatch")) throw new Error("On-chain Merkle root has changed since you verified your email. Please re-verify.");
+                if (reason.includes("InvalidProof")) throw new Error("The ZK proof is cryptographically invalid for this circuit. Try refreshing.");
+                if (reason.includes("NullifierAlreadyUsed")) throw new Error("This identity has already been registered.");
+                throw dryRunError; // Rethrow if we can't identify a specific reason
+            }
+
+            showStatus("Submitting registration transaction...");
+            
+            // Add a generous gas limit since estimateGas is failing
+            const tx = await signerContract.registerProposer(proof, publicInputsBytes32, {
+                ...overrides,
+                gasLimit: 8000000n, // Large enough for Noir proof verification + calldata
+            });
             await tx.wait();
 
             setIsProposerRole(true);
             showStatus("You are now registered as proposer.");
             recordActivity("Proposer registered", "ZK proposer registration completed.", "success");
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            const message = getErrorMessage(error);
-            if (
-                message.includes("No ZKVotingDAO contract found")
-                || message.includes("DAO proposer round is")
-            ) {
-                showStatus(message);
-            } else {
-                showStatus("Proposer registration failed.");
+            let message = getErrorMessage(error);
+            
+            if (message.includes("RootMismatch")) {
+                message = "The on-chain Merkle root has changed. Please refresh and re-verify your email.";
+            } else if (message.includes("NullifierAlreadyUsed")) {
+                message = "This identity has already been registered as a proposer.";
+            } else if (message.includes("InvalidProof")) {
+                message = "The ZK proof was rejected by the contract verifier. Check circuit/verifier sync.";
+            } else if (message.includes("action=\"estimateGas\"")) {
+                message = "Blockchain rejected the transaction. This usually means the ZK proof is invalid or root is stale.";
             }
-            recordActivity("Proposer registration failed", "Proof or transaction confirmation failed.", "warn");
+
+            showStatus(`Registration failed: ${message}`);
+            recordActivity("Registration failed", message, "error");
         } finally {
             setIsLoading(false);
         }
@@ -402,7 +501,8 @@ function App() {
             const { contract } = await getDaoWriteContract();
             const durationSeconds = Math.floor(newProposalDurationMinutes * 60);
 
-            const tx = await contract.createProposal(newProposalDesc, newProposalRound, durationSeconds);
+            const overrides = await getGasOverrides();
+            const tx = await contract.createProposal(newProposalDesc, newProposalRound, durationSeconds, overrides);
             await tx.wait();
 
             setNewProposalDesc("");
@@ -425,8 +525,20 @@ function App() {
         }
     }
 
-    async function voteGasless(support: boolean) {
-        if (!mySecret || selectedProposalId === null) {
+    async function voteGasless(support: boolean, manualSecret?: string) {
+        let secretToUse = mySecret;
+        
+        if (manualSecret && manualSecret.trim()) {
+            try {
+                secretToUse = BigInt(manualSecret.trim());
+            } catch (e) {
+                showStatus("Invalid secret format. Must be a numeric string.");
+                return;
+            }
+        }
+
+        if (!secretToUse || selectedProposalId === null) {
+            showStatus("Please verify your identity or enter your secret first.");
             return;
         }
 
@@ -437,14 +549,32 @@ function App() {
 
         try {
             setIsLoading(true);
-            showStatus("Generating anonymous proof...");
+            showStatus("Checking identity round...");
+
+            // Use the new helper to find which round this secret actually belongs to
+            let secretRound: number;
+            let secretIndex: number;
+            
+            try {
+                const lookup = findRoundAndIndexForSecret(secretToUse);
+                secretRound = lookup.roundId;
+                secretIndex = lookup.index;
+            } catch (e: any) {
+                throw new Error(e.message || "Secret not recognized in current eligibility rounds.");
+            }
 
             const proposalRound = Number(proposal.eligibilityRound);
-            const secretIndex = getSecretIndexForRound(mySecret, proposalRound);
-            const { pathElements, pathIndices } = getMerklePath(secretIndex, proposalRound);
+            
+            if (secretRound !== proposalRound) {
+                console.warn(`Round mismatch: Secret is from round ${secretRound}, but proposal requires round ${proposalRound}. Trying anyway if Merkle roots match...`);
+            }
+
+            const { pathElements, pathIndices } = getMerklePath(secretIndex, secretRound);
+
+            showStatus("Generating anonymous proof...");
 
             const { proof, publicInputs } = await generateProof({
-                secret: mySecret,
+                secret: secretToUse,
                 pathElements,
                 pathIndices,
                 proposalId: BigInt(selectedProposalId),
@@ -453,13 +583,14 @@ function App() {
 
             showStatus("Relaying gasless transaction...");
 
-            const response = await fetch("http://localhost:3000/api/relay/vote", {
+            const relayUrl = import.meta.env.VITE_RELAY_URL || "http://localhost:3000";
+            const response = await fetch(`${relayUrl}/api/relay/vote`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     proposalId: selectedProposalId,
                     support,
-                    proof,
+                    proof: ethers.hexlify(proof),
                     publicInputs,
                 }),
             });
@@ -505,7 +636,8 @@ function App() {
 
             const { contract } = await getDaoWriteContract();
 
-            const tx = await contract.executeProposal(proposalId);
+            const overrides = await getGasOverrides();
+            const tx = await contract.executeProposal(proposalId, overrides);
             await tx.wait();
 
             showStatus(`Proposal #${proposalId} executed successfully.`);
@@ -546,6 +678,14 @@ function App() {
         setSelectedProposalId(proposalId);
         setView("PROPOSAL");
     }
+
+    useEffect(() => {
+        // Check for Cross-Origin Isolation (critical for stable ZK proving in browser)
+        console.log("Cross-Origin Isolated:", window.crossOriginIsolated);
+        if (!window.crossOriginIsolated) {
+            console.warn("WARNING: Page is NOT cross-origin isolated. Prover may be unstable. Ensure headers are correctly set in vite.config.ts.");
+        }
+    }, []);
 
     useEffect(() => {
         if (walletConnected) {
@@ -813,8 +953,8 @@ function App() {
                         yesShare={yesShare}
                         mySecret={mySecret}
                         isLoading={isLoading}
-                        onVoteYes={() => void voteGasless(true)}
-                        onVoteNo={() => void voteGasless(false)}
+                        onVoteYes={(manualSecret) => void voteGasless(true, manualSecret)}
+                        onVoteNo={(manualSecret) => void voteGasless(false, manualSecret)}
                         onExecute={() => void executeProposal(selectedProposal.id)}
                         onBackToHub={() => setView("HUB")}
                     />
