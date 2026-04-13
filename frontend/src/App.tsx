@@ -471,7 +471,7 @@ function App() {
             }
 
             showStatus(`Registration failed: ${message}`);
-            recordActivity("Registration failed", message, "error");
+            recordActivity("Registration failed", message, "warn");
         } finally {
             setIsLoading(false);
         }
