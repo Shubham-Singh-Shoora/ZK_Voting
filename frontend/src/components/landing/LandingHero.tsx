@@ -76,7 +76,7 @@ export function LandingHero(props: LandingHeroProps) {
                 <nav className="aegis-nav-links">
                     <button onClick={props.onGoDocs}>Docs</button>
                     <button onClick={props.onGoResources}>Resources</button>
-                    <button onClick={props.onGoExplorer}>GitHub</button>
+                    <button onClick={() => window.open("https://github.com/Shubham-Singh-Shoora/Aegon", "_blank")}>GitHub</button>
                     <button className="aegis-btn-ghost" onClick={props.onGoSupport}>Book Support</button>
                 </nav>
             </header>
