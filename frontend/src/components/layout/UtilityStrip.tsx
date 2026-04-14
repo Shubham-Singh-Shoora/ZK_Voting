@@ -9,13 +9,20 @@ interface UtilityStripProps {
     unreadNotifications: number;
     onSetView: (view: Exclude<ViewState, "PROPOSAL">) => void;
     onWalletClick: () => void;
+    isProposerRole?: boolean;
 }
 
 export function UtilityStrip(props: UtilityStripProps) {
-    const ctaLabel = props.walletConnected ? "Open Hub" : "Get Started";
+    const ctaLabel = props.walletConnected 
+        ? (props.isProposerRole ? "Open Hub" : "Verify Identity") 
+        : "Get Started";
 
     // Filter main functional links for the top nav. We exclude LANDING to save space since the brand logo goes home.
-    const navItems = DOCK_ITEMS.filter((item) => item.key !== "LANDING" && item.key !== "SUPPORT" && item.key !== "RESOURCES");
+    const navItems = DOCK_ITEMS.filter((item) => {
+        if (item.key === "LANDING" || item.key === "SUPPORT" || item.key === "RESOURCES") return false;
+        if (item.key === "HUB" && !props.isProposerRole) return false;
+        return true;
+    });
 
     return (
         <header className="utility-strip">
@@ -95,7 +102,7 @@ export function UtilityStrip(props: UtilityStripProps) {
                 </button>
                 <button 
                     className="primary-btn strip-cta" 
-                    onClick={() => props.onSetView(props.walletConnected ? "HUB" : "VERIFY")}
+                    onClick={() => props.onSetView(props.walletConnected ? (props.isProposerRole ? "HUB" : "VERIFY") : "VERIFY")}
                     style={{ background: "#F76F32", color: "#0A0A0A", fontWeight: "bold" }}
                 >
                     {ctaLabel}

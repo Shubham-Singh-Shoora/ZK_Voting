@@ -229,12 +229,17 @@ function App() {
 
             setUserAddress(address);
             setWalletConnected(true);
-            setView("VERIFY");
 
             await loadProposals();
 
             const proposerFlag = await contract.isProposer(address);
             setIsProposerRole(Boolean(proposerFlag));
+            
+            if (Boolean(proposerFlag)) {
+                setView("HUB");
+            } else {
+                setView("VERIFY");
+            }
 
             showStatus("Wallet connected. Welcome to the DAO console.");
             recordActivity("Wallet connected", `Signed in as ${formatAddress(address)}`, "success");
@@ -455,6 +460,7 @@ function App() {
             await tx.wait();
 
             setIsProposerRole(true);
+            setView("HUB");
             showStatus("You are now registered as proposer.");
             recordActivity("Proposer registered", "ZK proposer registration completed.", "success");
         } catch (error: any) {
@@ -512,6 +518,7 @@ function App() {
             showStatus("Proposal created successfully.");
             recordActivity("Proposal created", `Submitted proposal for round ${newProposalRound}.`, "success");
             await loadProposals();
+            setView("EXPLORER");
         } catch (error) {
             console.error(error);
             const message = getErrorMessage(error);
@@ -603,6 +610,23 @@ function App() {
             }
 
             showStatus("Vote relayed and recorded.");
+            
+            console.log("--------------- ZK PROOF ---------------");
+            console.log("Successfully generated anonymous voting proof:");
+            console.log("Proof Bytes:", ethers.hexlify(proof));
+            console.log("Public Inputs:", publicInputs);
+            console.log("----------------------------------------");
+            console.log("Vote successfully recorded on the relay server.");
+
+            setProposals((previous) => previous.map((p) => {
+                if (p.id === selectedProposalId) {
+                    return support
+                        ? { ...p, yesVotes: p.yesVotes + 1n }
+                        : { ...p, noVotes: p.noVotes + 1n };
+                }
+                return p;
+            }));
+
             recordActivity(
                 "Vote cast",
                 `${support ? "YES" : "NO"} vote relayed for proposal #${selectedProposalId}.`,
@@ -892,6 +916,7 @@ function App() {
                     unreadNotifications={unreadNotifications}
                     onSetView={setView}
                     onWalletClick={connectWallet}
+                    isProposerRole={isProposerRole}
                 />
             )}
 

@@ -42,24 +42,32 @@ export function HubPage(props: HubPageProps) {
                         value={props.newProposalDesc}
                         onChange={(event) => props.setNewProposalDesc(event.target.value)}
                     />
-                    <div className="field-row">
-                        <input
-                            className="input"
-                            type="number"
-                            min={1}
-                            value={props.newProposalRound}
-                            onChange={(event) => props.setNewProposalRound(Number(event.target.value))}
-                            placeholder="Round ID"
-                        />
-                        <input
-                            className="input"
-                            type="number"
-                            min={1}
-                            value={props.newProposalDurationMinutes}
-                            onChange={(event) => props.setNewProposalDurationMinutes(Number(event.target.value))}
-                            placeholder="Duration (minutes)"
-                        />
-                        <button className="primary-btn" disabled={props.isLoading} onClick={props.onCreateProposal}>
+                    <div className="field-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", flex: 1 }}>
+                            <label style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.7)" }}>Eligibility Round ID</label>
+                            <input
+                                className="input"
+                                type="number"
+                                min={1}
+                                value={props.newProposalRound}
+                                onChange={(event) => props.setNewProposalRound(Number(event.target.value))}
+                                placeholder="Round ID"
+                                style={{ width: "100%" }}
+                            />
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", flex: 1 }}>
+                            <label style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.7)" }}>Voting Period (minutes)</label>
+                            <input
+                                className="input"
+                                type="number"
+                                min={1}
+                                value={props.newProposalDurationMinutes}
+                                onChange={(event) => props.setNewProposalDurationMinutes(Number(event.target.value))}
+                                placeholder="Duration (minutes)"
+                                style={{ width: "100%" }}
+                            />
+                        </div>
+                        <button className="primary-btn" disabled={props.isLoading} onClick={props.onCreateProposal} style={{ height: "42px", padding: "0 1.5rem" }}>
                             Submit Proposal
                         </button>
                     </div>
