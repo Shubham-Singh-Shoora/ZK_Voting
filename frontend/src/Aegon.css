@@ -1,0 +1,139 @@
+/* src/Aegon.css - Global Aegon Overrides for DAO Console */
+
+/* Deep Charcoal Background and Atmospheric Glow */
+.mars-veil {
+    background:
+        radial-gradient(circle at 10% 20%, rgba(247, 111, 50, 0.08), transparent 45%),
+        radial-gradient(circle at 85% 10%, rgba(62, 215, 215, 0.05), transparent 40%),
+        #0A0A0A !important;
+}
+
+.ambient-layer {
+    background: linear-gradient(150deg, rgba(16, 15, 20, 0.6) 0%, rgba(8, 8, 10, 0.96) 100%) !important;
+}
+
+body {
+    background: #0A0A0A !important;
+}
+
+/* Page & Panel Alignment */
+.page {
+    border: 1px solid rgba(247, 111, 50, 0.15) !important;
+    background: linear-gradient(170deg, rgba(16, 16, 18, 0.95) 0%, rgba(10, 10, 12, 0.98) 100%) !important;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6) !important;
+}
+
+.panel {
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    background: rgba(14, 14, 16, 0.8) !important;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Subtle Spline-like Geometry glow behind text panels */
+.panel::before {
+    content: "";
+    position: absolute;
+    top: -50px;
+    right: -50px;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle, rgba(247, 111, 50, 0.08) 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+}
+
+.panel > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Primary Form Interactions (Glowing Teal on Focus) */
+.input:focus, .page-input:focus, .text-area:focus, .select-input:focus {
+    border-color: #3ED7D7 !important;
+    box-shadow: 0 0 0 3px rgba(62, 215, 215, 0.18) !important;
+}
+
+/* Buttons mapping from Red -> Aegis Orange (#F76F32) */
+.primary-btn {
+    background: #F76F32 !important;
+    color: #0A0A0A !important;
+    border: none !important;
+}
+.primary-btn:hover:not(:disabled) {
+    background: #FF8550 !important;
+    box-shadow: 0 4px 12px rgba(247, 111, 50, 0.3) !important;
+}
+
+.ghost-btn, .secondary-btn, .danger-btn {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+.ghost-btn:hover:not(:disabled), .secondary-btn:hover:not(:disabled), .danger-btn:hover:not(:disabled) {
+    border-color: #F76F32 !important;
+    color: #F76F32 !important;
+}
+
+.wallet-pill {
+    border-color: rgba(62, 215, 215, 0.3) !important;
+}
+.wallet-pill:hover {
+    border-color: #3ED7D7 !important;
+    background: rgba(62, 215, 215, 0.1) !important;
+}
+
+/* Status Notifications / Highlights */
+.success-block {
+    border-color: rgba(62, 215, 215, 0.4) !important;
+    background: rgba(20, 46, 34, 0.56) !important;
+}
+
+.error-block, .timeline-item.warn, .notification-item.warn {
+    border-color: rgba(247, 111, 50, 0.5) !important;
+    background: rgba(69, 20, 16, 0.76) !important;
+}
+
+.yes-bar {
+    background: linear-gradient(90deg, #F76F32, #FF9C4A) !important;
+}
+
+/* Selection / Hover States */
+.proposal-card:hover {
+    border-color: #F76F32 !important;
+    box-shadow: 0 12px 24px rgba(247, 111, 50, 0.15) !important;
+}
+
+.check-dot {
+    background: #3ED7D7 !important;
+    color: #0A0A0A !important;
+}
+
+.faq-item:hover, .check-item:hover {
+    border-color: #F76F32 !important;
+}
+
+.timeline-item.success {
+    border-color: rgba(62, 215, 215, 0.5) !important;
+    background: rgba(10, 40, 30, 0.72) !important;
+    box-shadow: 0 0 15px rgba(62, 215, 215, 0.15) !important;
+}
+
+/* Pulsing glow animation for "Wallet Connected" in timeline */
+@keyframes aegonPulse {
+    0% { box-shadow: 0 0 5px rgba(62, 215, 215, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(62, 215, 215, 0.6); }
+    100% { box-shadow: 0 0 5px rgba(62, 215, 215, 0.2); }
+}
+
+.timeline-item.success {
+    animation: aegonPulse 3s infinite ease-in-out;
+}
+
+/* Minimalist Accordion / Lists */
+.aegon-list-row {
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    line-height: 1.8;
+}
+.aegon-list-row:last-child {
+    border-bottom: none;
+}

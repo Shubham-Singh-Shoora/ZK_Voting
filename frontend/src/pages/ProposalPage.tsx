@@ -52,15 +52,14 @@ export function ProposalPage(props: ProposalPageProps) {
                         <p className="muted-copy">
                             Proofs are generated in-browser, then sent through the relayer for gasless execution.
                         </p>
-                        
-                        <div className="secret-input-row" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--tg-text-muted)' }}>
+
+                        <div className="secret-input-row">
+                            <label className="field-label secret-label">
                                 Your ZK Secret (Numeric string from verification)
                             </label>
-                            <input 
+                            <input
                                 type="text"
-                                className="page-input"
-                                style={{ width: '100%', fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                                className="input page-input input-mono"
                                 placeholder="Paste your secret numeric string here..."
                                 value={manualSecret}
                                 onChange={(e) => setManualSecret(e.target.value)}

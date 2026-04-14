@@ -19,7 +19,7 @@ import type {
     Proposal,
     ViewState,
 } from "./types";
-import { DOCK_ITEMS, FAQ_ITEMS } from "./config/appConfig";
+import { FAQ_ITEMS } from "./config/appConfig";
 import {
     formatAddress,
     formatTimeFromUnix,
@@ -27,8 +27,8 @@ import {
     getProposalStage,
 } from "./utils/governance";
 import { UtilityStrip } from "./components/layout/UtilityStrip";
-import { CommandDock } from "./components/layout/CommandDock";
 import { StatusToast } from "./components/feedback/StatusToast";
+import { AnimatePresence, motion } from "framer-motion";
 import { LandingPage } from "./pages/LandingPage";
 import { VerifyPage } from "./pages/VerifyPage";
 import { HubPage } from "./pages/HubPage";
@@ -40,6 +40,7 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { DocsPage } from "./pages/DocsPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import "./App.css";
+import "./Aegon.css";
 
 const BN254_FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const PROPOSER_REGISTRATION_ID_FIELD = ethers.MaxUint256 % BN254_FIELD_MODULUS;
@@ -885,150 +886,154 @@ function App() {
 
             {view !== "LANDING" && (
                 <UtilityStrip
+                    view={view}
                     walletConnected={walletConnected}
                     walletLabel={walletConnected ? formatAddress(userAddress) : "Connect Wallet"}
-                    onWalletClick={walletConnected ? () => setView("VERIFY") : connectWallet}
+                    unreadNotifications={unreadNotifications}
+                    onSetView={setView}
+                    onWalletClick={connectWallet}
                 />
             )}
 
             <main className={`content-area ${view === "LANDING" ? "landing-mode" : ""}`}>
-                {view === "LANDING" && (
-                    <LandingPage
-                        walletConnected={walletConnected}
-                        walletLabel={walletConnected ? formatAddress(userAddress) : "Connect Wallet"}
-                        chainLabel={chainLabel}
-                        unreadNotifications={unreadNotifications}
-                        proposalsLength={proposals.length}
-                        activeCount={activeCount}
-                        endingSoonCount={endingSoonCount}
-                        passedCount={passedCount}
-                        onConnectWallet={connectWallet}
-                        onGoVerify={() => setView("VERIFY")}
-                        onGoDocs={() => setView("DOCS")}
-                        onGoResources={() => setView("RESOURCES")}
-                        onGoExplorer={() => setView("EXPLORER")}
-                        onGoNotifications={() => setView("NOTIFICATIONS")}
-                        onGoHub={() => setView("HUB")}
-                        onGoSupport={() => setView("SUPPORT")}
-                    />
-                )}
+                <AnimatePresence mode="popLayout">
+                    <motion.div
+                        key={view}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -15 }}
+                        transition={{ duration: 0.3, type: "spring", stiffness: 300, damping: 30 }}
+                        style={{ width: "100%" }}
+                    >
+                        {view === "LANDING" && (
+                            <LandingPage
+                                walletConnected={walletConnected}
+                                walletLabel={walletConnected ? formatAddress(userAddress) : "Connect Wallet"}
+                                chainLabel={chainLabel}
+                                unreadNotifications={unreadNotifications}
+                                proposalsLength={proposals.length}
+                                activeCount={activeCount}
+                                endingSoonCount={endingSoonCount}
+                                passedCount={passedCount}
+                                onConnectWallet={connectWallet}
+                                onGoVerify={() => setView("VERIFY")}
+                                onGoDocs={() => setView("DOCS")}
+                                onGoResources={() => setView("RESOURCES")}
+                                onGoExplorer={() => setView("EXPLORER")}
+                                onGoNotifications={() => setView("NOTIFICATIONS")}
+                                onGoHub={() => setView("HUB")}
+                                onGoSupport={() => setView("SUPPORT")}
+                            />
+                        )}
 
-                {view === "VERIFY" && (
-                    <VerifyPage
-                        verifyEmail={verifyEmail}
-                        setVerifyEmail={setVerifyEmail}
-                        myRole={myRole}
-                        mySecret={mySecret}
-                        isProposerRole={isProposerRole}
-                        isLoading={isLoading}
-                        onVerifyEligibility={handleVerifyEligibility}
-                        onRegisterAsProposer={registerAsProposer}
-                        onGoHub={() => setView("HUB")}
-                    />
-                )}
+                        {view === "VERIFY" && (
+                            <VerifyPage
+                                verifyEmail={verifyEmail}
+                                setVerifyEmail={setVerifyEmail}
+                                myRole={myRole}
+                                mySecret={mySecret}
+                                isProposerRole={isProposerRole}
+                                isLoading={isLoading}
+                                onVerifyEligibility={handleVerifyEligibility}
+                                onRegisterAsProposer={registerAsProposer}
+                                onGoHub={() => setView("HUB")}
+                            />
+                        )}
 
-                {view === "HUB" && (
-                    <HubPage
-                        isProposerRole={isProposerRole}
-                        isLoading={isLoading}
-                        newProposalDesc={newProposalDesc}
-                        setNewProposalDesc={setNewProposalDesc}
-                        newProposalRound={newProposalRound}
-                        setNewProposalRound={setNewProposalRound}
-                        newProposalDurationMinutes={newProposalDurationMinutes}
-                        setNewProposalDurationMinutes={setNewProposalDurationMinutes}
-                        onCreateProposal={createProposal}
-                        onRefresh={loadProposals}
-                        proposals={proposals}
-                        getProposalStage={(proposal) => getProposalStage(proposal, currentTimestamp)}
-                        formatAddress={formatAddress}
-                        onOpenProposal={goToProposal}
-                    />
-                )}
+                        {view === "HUB" && (
+                            <HubPage
+                                isProposerRole={isProposerRole}
+                                isLoading={isLoading}
+                                newProposalDesc={newProposalDesc}
+                                setNewProposalDesc={setNewProposalDesc}
+                                newProposalRound={newProposalRound}
+                                setNewProposalRound={setNewProposalRound}
+                                newProposalDurationMinutes={newProposalDurationMinutes}
+                                setNewProposalDurationMinutes={setNewProposalDurationMinutes}
+                                onCreateProposal={createProposal}
+                                onRefresh={loadProposals}
+                                proposals={proposals}
+                                getProposalStage={(proposal) => getProposalStage(proposal, currentTimestamp)}
+                                formatAddress={formatAddress}
+                                onOpenProposal={goToProposal}
+                            />
+                        )}
 
-                {view === "PROPOSAL" && selectedProposal && (
-                    <ProposalPage
-                        selectedProposal={selectedProposal}
-                        stage={getProposalStage(selectedProposal, currentTimestamp)}
-                        yesShare={yesShare}
-                        mySecret={mySecret}
-                        isLoading={isLoading}
-                        onVoteYes={(manualSecret) => void voteGasless(true, manualSecret)}
-                        onVoteNo={(manualSecret) => void voteGasless(false, manualSecret)}
-                        onExecute={() => void executeProposal(selectedProposal.id)}
-                        onBackToHub={() => setView("HUB")}
-                    />
-                )}
+                        {view === "PROPOSAL" && selectedProposal && (
+                            <ProposalPage
+                                selectedProposal={selectedProposal}
+                                stage={getProposalStage(selectedProposal, currentTimestamp)}
+                                yesShare={yesShare}
+                                mySecret={mySecret}
+                                isLoading={isLoading}
+                                onVoteYes={(manualSecret) => void voteGasless(true, manualSecret)}
+                                onVoteNo={(manualSecret) => void voteGasless(false, manualSecret)}
+                                onExecute={() => void executeProposal(selectedProposal.id)}
+                                onBackToHub={() => setView("HUB")}
+                            />
+                        )}
 
-                {view === "ACTIVITY" && (
-                    <ActivityPage
-                        walletConnected={walletConnected}
-                        userAddress={userAddress}
-                        myRole={myRole}
-                        myProposalsLength={myProposals.length}
-                        activeCount={activeCount}
-                        activityLog={activityLog}
-                        formatAddress={formatAddress}
-                        onGoHub={() => setView("HUB")}
-                    />
-                )}
+                        {view === "ACTIVITY" && (
+                            <ActivityPage
+                                walletConnected={walletConnected}
+                                userAddress={userAddress}
+                                myRole={myRole}
+                                myProposalsLength={myProposals.length}
+                                activeCount={activeCount}
+                                activityLog={activityLog}
+                                formatAddress={formatAddress}
+                                onGoHub={() => setView("HUB")}
+                            />
+                        )}
 
-                {view === "EXPLORER" && (
-                    <ExplorerPage
-                        explorerQuery={explorerQuery}
-                        setExplorerQuery={setExplorerQuery}
-                        explorerStatus={explorerStatus}
-                        setExplorerStatus={setExplorerStatus}
-                        explorerRound={explorerRound}
-                        setExplorerRound={setExplorerRound}
-                        roundOptions={roundOptions}
-                        filteredProposals={filteredProposals}
-                        getProposalStage={(proposal) => getProposalStage(proposal, currentTimestamp)}
-                        formatAddress={formatAddress}
-                        onRefresh={loadProposals}
-                        onOpenProposal={goToProposal}
-                    />
-                )}
+                        {view === "EXPLORER" && (
+                            <ExplorerPage
+                                explorerQuery={explorerQuery}
+                                setExplorerQuery={setExplorerQuery}
+                                explorerStatus={explorerStatus}
+                                setExplorerStatus={setExplorerStatus}
+                                explorerRound={explorerRound}
+                                setExplorerRound={setExplorerRound}
+                                roundOptions={roundOptions}
+                                filteredProposals={filteredProposals}
+                                getProposalStage={(proposal) => getProposalStage(proposal, currentTimestamp)}
+                                formatAddress={formatAddress}
+                                onRefresh={loadProposals}
+                                onOpenProposal={goToProposal}
+                            />
+                        )}
 
-                {view === "SUPPORT" && (
-                    <SupportPage
-                        walletConnected={walletConnected}
-                        onConnectWallet={connectWallet}
-                        onGoVerify={() => setView("VERIFY")}
-                        onGoExplorer={() => setView("EXPLORER")}
-                        faqItems={FAQ_ITEMS}
-                        openFaqId={openFaqId}
-                        setOpenFaqId={setOpenFaqId}
-                    />
-                )}
+                        {view === "SUPPORT" && (
+                            <SupportPage
+                                walletConnected={walletConnected}
+                                onConnectWallet={connectWallet}
+                                onGoVerify={() => setView("VERIFY")}
+                                onGoExplorer={() => setView("EXPLORER")}
+                                faqItems={FAQ_ITEMS}
+                                openFaqId={openFaqId}
+                                setOpenFaqId={setOpenFaqId}
+                            />
+                        )}
 
-                {view === "NOTIFICATIONS" && (
-                    <NotificationsPage
-                        unreadNotifications={unreadNotifications}
-                        notifications={notifications}
-                        activeCount={activeCount}
-                        activityLogLength={activityLog.length}
-                        onMarkAllRead={markAllNotificationsRead}
-                        onClearRead={clearReadNotifications}
-                        onOpenProposal={goToProposal}
-                        onToggleRead={markNotificationRead}
-                    />
-                )}
+                        {view === "NOTIFICATIONS" && (
+                            <NotificationsPage
+                                unreadNotifications={unreadNotifications}
+                                notifications={notifications}
+                                activeCount={activeCount}
+                                activityLogLength={activityLog.length}
+                                onMarkAllRead={markAllNotificationsRead}
+                                onClearRead={clearReadNotifications}
+                                onOpenProposal={goToProposal}
+                                onToggleRead={markNotificationRead}
+                            />
+                        )}
 
-                {view === "DOCS" && <DocsPage />}
+                        {view === "DOCS" && <DocsPage />}
 
-                {view === "RESOURCES" && <ResourcesPage chainLabel={chainLabel} />}
+                        {view === "RESOURCES" && <ResourcesPage chainLabel={chainLabel} />}
+                    </motion.div>
+                </AnimatePresence>
             </main>
-
-            {view !== "LANDING" && (
-                <CommandDock
-                    view={view}
-                    items={DOCK_ITEMS}
-                    walletConnected={walletConnected}
-                    unreadNotifications={unreadNotifications}
-                    onSetView={setView}
-                />
-            )}
 
             <StatusToast status={status} isLoading={isLoading} />
         </div>

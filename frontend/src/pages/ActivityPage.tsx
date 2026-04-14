@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import type { ActivityEntry } from "../types";
 import { PageHeader, StatPanel } from "../components";
 
@@ -11,6 +12,21 @@ interface ActivityPageProps {
     formatAddress: (address: string) => string;
     onGoHub: () => void;
 }
+
+const listVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.1
+        }
+    }
+};
+
+const itemVariants = {
+    hidden: { opacity: 0, x: -20 },
+    visible: { opacity: 1, x: 0 }
+};
 
 export function ActivityPage(props: ActivityPageProps) {
     return (
@@ -36,17 +52,21 @@ export function ActivityPage(props: ActivityPageProps) {
                 {props.activityLog.length === 0 ? (
                     <p className="muted-copy">No actions recorded yet. Verify identity or cast a vote to populate this timeline.</p>
                 ) : (
-                    <div className="timeline-stack">
+                    <motion.div className="timeline-stack" variants={listVariants} initial="hidden" animate="visible">
                         {props.activityLog.map((entry) => (
-                            <article key={entry.id} className={`timeline-item ${entry.tone}`}>
+                            <motion.article 
+                                variants={itemVariants}
+                                key={entry.id} 
+                                className={`timeline-item ${entry.tone}`}
+                            >
                                 <div>
                                     <p className="timeline-title">{entry.title}</p>
                                     <p className="muted-copy">{entry.detail}</p>
                                 </div>
                                 <span className="timeline-time">{entry.timestamp}</span>
-                            </article>
+                            </motion.article>
                         ))}
-                    </div>
+                    </motion.div>
                 )}
             </div>
         </section>

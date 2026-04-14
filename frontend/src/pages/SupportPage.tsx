@@ -1,4 +1,6 @@
 import type { FaqItem } from "../types";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 
 interface SupportPageProps {
     walletConnected: boolean;
@@ -12,16 +14,16 @@ interface SupportPageProps {
 
 export function SupportPage(props: SupportPageProps) {
     return (
-        <section className="page reveal">
+        <section className="page" style={{ maxWidth: "900px", margin: "0 auto" }}>
             <div className="page-head">
                 <h2>Help and Support</h2>
                 <p>Quick onboarding and troubleshooting for your governance workflow.</p>
             </div>
 
-            <div className="support-grid">
+            <div style={{ display: "flex", flexDirection: "column", gap: "2rem", marginTop: "2rem" }}>
                 <article className="panel">
                     <h3>Quick Start Checklist</h3>
-                    <div className="checklist-stack">
+                    <div className="checklist-stack" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1rem" }}>
                         <button className="check-item" onClick={props.walletConnected ? props.onGoVerify : props.onConnectWallet}>
                             <span className="check-dot">1</span>
                             <div>
@@ -47,23 +49,60 @@ export function SupportPage(props: SupportPageProps) {
                 </article>
 
                 <article className="panel">
-                    <h3>FAQ</h3>
-                    <div className="faq-stack">
+                    <h3>Frequently Asked Questions</h3>
+                    <div className="faq-stack" style={{ marginTop: "1.5rem" }}>
                         {props.faqItems.map((item) => {
                             const isOpen = props.openFaqId === item.id;
 
                             return (
-                                <button
-                                    key={item.id}
-                                    className={`faq-item ${isOpen ? "open" : ""}`}
-                                    onClick={() => props.setOpenFaqId(isOpen ? "" : item.id)}
-                                >
-                                    <div className="faq-question-row">
-                                        <p className="timeline-title">{item.question}</p>
-                                        <span className="badge subtle">{isOpen ? "Open" : "Closed"}</span>
-                                    </div>
-                                    {isOpen && <p className="muted-copy faq-answer">{item.answer}</p>}
-                                </button>
+                                <div key={item.id} className="aegon-list-row" style={{ padding: "0.5rem 0" }}>
+                                    <button
+                                        onClick={() => props.setOpenFaqId(isOpen ? "" : item.id)}
+                                        style={{
+                                            width: "100%",
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            background: "none",
+                                            border: "none",
+                                            padding: "0.8rem 0",
+                                            color: isOpen ? "#F76F32" : "#FFFFFF",
+                                            fontSize: "1rem",
+                                            fontWeight: 600,
+                                            cursor: "pointer",
+                                            transition: "color 0.2s ease"
+                                        }}
+                                    >
+                                        <span style={{ textAlign: "left" }}>{item.question}</span>
+                                        <motion.div
+                                            animate={{ rotate: isOpen ? 180 : 0 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            <ChevronDown size={20} />
+                                        </motion.div>
+                                    </button>
+                                    
+                                    <AnimatePresence>
+                                        {isOpen && (
+                                            <motion.div
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: "auto", opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                transition={{ duration: 0.3, ease: "easeInOut" }}
+                                                style={{ overflow: "hidden" }}
+                                            >
+                                                <p style={{ 
+                                                    paddingBottom: "1rem", 
+                                                    color: "rgba(255,255,255,0.7)", 
+                                                    lineHeight: 1.6,
+                                                    margin: 0
+                                                }}>
+                                                    {item.answer}
+                                                </p>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             );
                         })}
                     </div>
