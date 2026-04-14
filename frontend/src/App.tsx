@@ -234,12 +234,8 @@ function App() {
 
             const proposerFlag = await contract.isProposer(address);
             setIsProposerRole(Boolean(proposerFlag));
-            
-            if (Boolean(proposerFlag)) {
-                setView("HUB");
-            } else {
-                setView("VERIFY");
-            }
+
+            setView("VERIFY");
 
             showStatus("Wallet connected. Welcome to the DAO console.");
             recordActivity("Wallet connected", `Signed in as ${formatAddress(address)}`, "success");
@@ -317,6 +313,10 @@ function App() {
             setMySecret(proposerCredential.secret);
             showStatus(`Faculty verified! Secret: ${proposerCredential.secret.toString().substring(0, 12)}...`);
             recordActivity("Eligibility verified", "Matched proposer credential in round 999.", "success");
+            
+            if (isProposerRole) {
+                setView("HUB");
+            }
             return;
         }
 
@@ -384,6 +384,7 @@ function App() {
             if (alreadyProposer) {
                 showStatus("You are already registered as a proposer.");
                 setIsProposerRole(true);
+                setView("HUB");
                 return;
             }
 
@@ -917,6 +918,7 @@ function App() {
                     onSetView={setView}
                     onWalletClick={connectWallet}
                     isProposerRole={isProposerRole}
+                    isProposerVerified={myRole === "Faculty proposer cohort (Round 999)"}
                 />
             )}
 
