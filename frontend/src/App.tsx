@@ -1030,7 +1030,7 @@ function App() {
 
                         {view === "DOCS" && <DocsPage />}
 
-                        {view === "RESOURCES" && <ResourcesPage chainLabel={chainLabel} />}
+                        {view === "RESOURCES" && <ResourcesPage />}
                     </motion.div>
                 </AnimatePresence>
             </main>

@@ -1,11 +1,7 @@
 import { motion } from "framer-motion";
 import { ExternalLink } from "lucide-react";
 
-interface ResourcesPageProps {
-    chainLabel: string;
-}
-
-export function ResourcesPage(props: ResourcesPageProps) {
+export function ResourcesPage() {
     const resources = [
         { 
             label: "Vitalik on Collusion (MACI)", 
